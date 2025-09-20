@@ -8,7 +8,11 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
 import { Settings as SettingsIcon, Bell, Mail, Shield, Database } from 'lucide-react';
 
-export default function Settings() {
+interface SettingsProps {
+  onTabChange: (tab: string) => void; // Added to switch tabs
+}
+
+export default function Settings({ onTabChange }: SettingsProps) {
   const { user } = useAuth();
 
   return (
@@ -198,6 +202,10 @@ export default function Settings() {
         <div className="flex justify-end gap-2">
           <Button variant="outline">Reset to Defaults</Button>
           <Button>Save All Changes</Button>
+          {/* New QR Codes Button */}
+          <Button variant="secondary" onClick={() => onTabChange('qr-codes')}>
+            Go to QR Codes
+          </Button>
         </div>
       </div>
     </div>

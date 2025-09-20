@@ -5,6 +5,7 @@ import LoginForm from './components/Auth/LoginForm';
 import DashboardOverview from './components/Dashboard/DashboardOverview';
 import AttendanceCapture from './components/Attendance/AttendanceCapture';
 import StudentsList from './components/Students/StudentsList';
+import StudentQRCodes from './components/StudentQRCodes'; 
 import ReportsGeneration from './components/Reports/ReportsGeneration';
 import Settings from './components/Settings/Settings';
 import './App.css';
@@ -30,15 +31,17 @@ function AppContent() {
       case 'dashboard':
         return <DashboardOverview />;
       case 'attendance':
-        return <DashboardOverview />; // Could be a separate attendance view
+        return <DashboardOverview />; 
       case 'students':
         return <StudentsList />;
       case 'checkin':
         return <AttendanceCapture />;
+      case 'qr-codes': 
+        return <StudentQRCodes />;
       case 'reports':
         return <ReportsGeneration />;
       case 'alerts':
-        return <StudentsList />; // Could be a separate alerts view
+        return <StudentsList />; 
       case 'settings':
         return <Settings />;
       default:

@@ -19,7 +19,7 @@ export default function QRScanner({ onScan, students }: QRScannerProps) {
 
   const startScanner = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.onloadedmetadata = () => {
@@ -65,10 +65,8 @@ export default function QRScanner({ onScan, students }: QRScannerProps) {
     if (code && !scannedQRs.includes(code.data)) {
       const matchedStudent = students.find(s => s.qrCode === code.data);
       if (matchedStudent) {
-        onScan(code.data);
-        setScannedQRs(prev => [...prev, code.data]);
-        stopScanner();
-        return;
+        onScan(code.data); // <-- Call AttendanceCapture handler
+        setScannedQRs(prev => [...prev, code.data]); // Prevent duplicate scans
       }
     }
 
@@ -80,12 +78,13 @@ export default function QRScanner({ onScan, students }: QRScannerProps) {
     return () => stopScanner();
   }, [isScanning]);
 
+  // Simulate Scan (for testing)
   const simulateScan = () => {
     if (!students.length) return;
-    const randomQR = students[Math.floor(Math.random() * students.length)].qrCode;
-    if (!scannedQRs.includes(randomQR)) {
-      onScan(randomQR);
-      setScannedQRs(prev => [...prev, randomQR]);
+    const specificQR = students[0].qrCode;
+    if (!scannedQRs.includes(specificQR)) {
+      onScan(specificQR);
+      setScannedQRs(prev => [...prev, specificQR]);
     }
   };
 
@@ -94,7 +93,13 @@ export default function QRScanner({ onScan, students }: QRScannerProps) {
       <div className="bg-gray-900 rounded-lg p-4 min-h-[300px] flex items-center justify-center relative">
         {isScanning ? (
           <>
-            <video ref={videoRef} autoPlay playsInline muted className="w-full max-h-[400px] object-cover rounded" />
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full max-h-[400px] object-cover rounded"
+            />
             <canvas ref={canvasRef} className="hidden" />
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="border-2 border-white border-dashed rounded-lg w-48 h-48 animate-pulse flex items-center justify-center">

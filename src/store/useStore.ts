@@ -17,7 +17,7 @@ export interface Student {
   timeSpent: number; // in hours
   lastActive: string;
   alerts: string[];
-  qrCode: string; // <-- Added
+  qrCode: string;
 }
 
 export interface AttendanceRecord {
@@ -46,7 +46,8 @@ interface AppState {
   attendanceRecords: AttendanceRecord[];
   classSessions: ClassSession[];
   selectedDate: string;
-  
+  lastMarkedPresent: string | null;
+
   // Actions
   addAttendanceRecord: (record: Omit<AttendanceRecord, 'id'>) => void;
   updateStudentEngagement: (studentId: string, data: Partial<Student>) => void;
@@ -55,17 +56,17 @@ interface AppState {
   generateRiskExplanation: (student: Student) => string;
 }
 
-// Helper to generate QR code string
+// ---------------- Helper: generate unique QR code ----------------
 const generateQRCode = (student: { name: string; id: string }) => {
   const sanitizedName = student.name.toUpperCase().replace(/\s+/g, '_');
   return `STUDENT_QR_${sanitizedName}_${student.id.padStart(3, '0')}`;
 };
 
-// Mock students
+// ---------------- Mock students ----------------
 const mockStudents: Student[] = [
   {
     id: '1',
-    name: 'Alex Chen',
+    name: 'Arpan Thakur',
     email: 'alex.chen@school.edu',
     avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150&h=150',
     attendanceRate: 85,
@@ -80,13 +81,13 @@ const mockStudents: Student[] = [
     timeSpent: 45,
     lastActive: '2025-01-05T10:30:00Z',
     alerts: [],
-    qrCode: '' // will be auto-generated
+    qrCode: ''
   },
   {
     id: '2',
-    name: 'Maria Rodriguez',
+    name: 'Surjakanta Das',
     email: 'maria.rodriguez@school.edu',
-    avatar: 'https://images.pexels.com/photos/3763188/pexels-photo-3763188.jpeg?auto=compress&cs=tinysrgb&w=150&h=150',
+    avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=150&h=150',
     attendanceRate: 92,
     engagementScore: 88,
     riskLevel: 'low',
@@ -103,9 +104,9 @@ const mockStudents: Student[] = [
   },
   {
     id: '3',
-    name: 'James Wilson',
+    name: 'Mohar Sarkar',
     email: 'james.wilson@school.edu',
-    avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=150&h=150',
+    avatar: 'https://images.pexels.com/photos/1036623/pexels-photo-1036623.jpeg?auto=compress&cs=tinysrgb&w=150&h=150',
     attendanceRate: 58,
     engagementScore: 45,
     riskLevel: 'high',
@@ -122,7 +123,7 @@ const mockStudents: Student[] = [
   },
   {
     id: '4',
-    name: 'Emma Thompson',
+    name: 'Snehasish Bhattacharya',
     email: 'emma.thompson@school.edu',
     avatar: 'https://images.pexels.com/photos/1036623/pexels-photo-1036623.jpeg?auto=compress&cs=tinysrgb&w=150&h=150',
     attendanceRate: 75,
@@ -141,28 +142,44 @@ const mockStudents: Student[] = [
   }
 ];
 
-// Generate QR codes automatically
+// Assign QR codes to all students
 mockStudents.forEach(student => {
   student.qrCode = generateQRCode(student);
 });
 
-// Mock attendance and sessions remain the same
+// ---------------- Mock data ----------------
 const mockAttendanceRecords: AttendanceRecord[] = [];
 const mockClassSessions: ClassSession[] = [];
 
+// ---------------- Zustand store ----------------
 export const useStore = create<AppState>((set, get) => ({
   students: mockStudents,
   attendanceRecords: mockAttendanceRecords,
   classSessions: mockClassSessions,
   selectedDate: new Date().toISOString().split('T')[0],
-  
+  lastMarkedPresent: null,
+
   addAttendanceRecord: (record) => {
     const newRecord = { ...record, id: Date.now().toString() };
-    set(state => ({
-      attendanceRecords: [...state.attendanceRecords, newRecord]
-    }));
+
+    set(state => {
+      const updatedStudents = state.students.map(student => {
+        if (student.id === record.studentId) {
+          const attended = student.attendedClasses + 1;
+          const rate = Math.round((attended / student.totalClasses) * 100);
+          return { ...student, attendedClasses: attended, attendanceRate: rate };
+        }
+        return student;
+      });
+
+      return {
+        attendanceRecords: [...state.attendanceRecords, newRecord],
+        students: updatedStudents,
+        lastMarkedPresent: record.studentName
+      };
+    });
   },
-  
+
   updateStudentEngagement: (studentId, data) => {
     set(state => ({
       students: state.students.map(student =>
@@ -170,20 +187,19 @@ export const useStore = create<AppState>((set, get) => ({
       )
     }));
   },
-  
+
   setSelectedDate: (date) => set({ selectedDate: date }),
-  
+
   calculateRiskLevel: (student) => {
     const attendanceScore = student.attendanceRate;
     const assignmentScore = (student.assignmentsSubmitted / student.totalAssignments) * 100;
     const quizScore = (student.quizAttempts / student.totalQuizzes) * 100;
-    
     const overallScore = (attendanceScore + assignmentScore + quizScore) / 3;
     if (overallScore >= 75) return 'low';
     if (overallScore >= 50) return 'medium';
     return 'high';
   },
-  
+
   generateRiskExplanation: (student) => {
     const reasons = [];
     if (student.attendanceRate < 75) reasons.push(`Low attendance (${student.attendanceRate}%)`);

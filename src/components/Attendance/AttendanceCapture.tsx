@@ -1,31 +1,29 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useStore, Student, AttendanceRecord } from '@/store/useStore';
+import { useStore, Student } from '@/store/useStore';
 import { QrCode, Mic, Type, Database, CheckCircle } from 'lucide-react';
 import QRScanner from './QRScanner';
+import { Combobox } from '@headlessui/react';
 
 export default function AttendanceCapture() {
   const [isRecording, setIsRecording] = useState(false);
-  const [textInput, setTextInput] = useState('');
   const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [query, setQuery] = useState('');
 
   const { addAttendanceRecord, students, attendanceRecords } = useStore();
-
   const today = new Date().toISOString().split('T')[0];
 
-  // Helper: check if attendance already exists
   const alreadyMarked = (studentId: string) =>
     attendanceRecords.some(r => r.studentId === studentId && r.date === today);
 
-  // QR Scan Handler
+  // ---------------- QR Scan ----------------
   const handleQRScan = (data: string) => {
     const student = students.find(s => s.qrCode === data);
-    if (!student) return;
-    if (alreadyMarked(student.id)) return;
+    if (!student || alreadyMarked(student.id)) return;
 
     addAttendanceRecord({
       studentId: student.id,
@@ -36,39 +34,67 @@ export default function AttendanceCapture() {
       status: 'present',
       location: 'Room 101'
     });
+
     setLastScanned(student.name);
   };
 
-  // Voice Handler
+  // ---------------- Voice Check-in ----------------
   const handleVoiceStart = () => {
-    setIsRecording(true);
-    setTimeout(() => {
-      setIsRecording(false);
-      const student = students[1]; // Demo: second student
-      if (!student || alreadyMarked(student.id)) return;
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-      addAttendanceRecord({
-        studentId: student.id,
-        studentName: student.name,
-        date: today,
-        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        method: 'voice',
-        status: 'present'
-      });
-      setLastScanned(student.name);
-    }, 3000);
+    if (!SpeechRecognition) {
+      alert("Your browser does not support Speech Recognition");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    setIsRecording(true);
+    recognition.start();
+
+    recognition.onresult = (event: any) => {
+      const spokenText = event.results[0][0].transcript.trim().toLowerCase();
+      console.log("Heard:", spokenText);
+
+      // Match spoken name to student
+      const student = students.find(s => s.name.toLowerCase() === spokenText);
+
+      if (student && !alreadyMarked(student.id)) {
+        addAttendanceRecord({
+          studentId: student.id,
+          studentName: student.name,
+          date: today,
+          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          method: 'voice',
+          status: 'present'
+        });
+        setLastScanned(student.name);
+      } else {
+        alert("No matching student found or already marked!");
+      }
+
+      setIsRecording(false);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsRecording(false);
+    };
   };
 
-  // Text Submit Handler
-  const handleTextSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!textInput.trim()) return;
+  // ---------------- Text Check-in ----------------
+  const filteredStudents = query === ''
+    ? students
+    : students.filter(s =>
+        s.name.toLowerCase().includes(query.toLowerCase()) ||
+        s.email.toLowerCase().includes(query.toLowerCase())
+      );
 
-    const student = students.find(s =>
-      s.name.toLowerCase().includes(textInput.toLowerCase()) ||
-      s.email.toLowerCase().includes(textInput.toLowerCase())
-    );
-
+  const handleStudentSelect = (student: Student) => {
     if (!student || alreadyMarked(student.id)) return;
 
     addAttendanceRecord({
@@ -79,13 +105,15 @@ export default function AttendanceCapture() {
       method: 'text',
       status: 'present'
     });
-    setTextInput('');
+
+    setSelectedStudent(student);
     setLastScanned(student.name);
+    setQuery('');
   };
 
-  // LMS Sync Handler
+  // ---------------- LMS Sync ----------------
   const handleLMSSync = () => {
-    const student = students[2]; // Demo: third student
+    const student = students[2]; // Example dummy LMS sync
     if (!student || alreadyMarked(student.id)) return;
 
     addAttendanceRecord({
@@ -96,9 +124,11 @@ export default function AttendanceCapture() {
       method: 'lms',
       status: 'present'
     });
+
     setLastScanned(student.name);
   };
 
+  // ---------------- Render ----------------
   return (
     <div className="space-y-6">
       <div>
@@ -128,6 +158,7 @@ export default function AttendanceCapture() {
               </TabsTrigger>
             </TabsList>
 
+            {/* QR Code */}
             <TabsContent value="qr" className="mt-6">
               <div className="space-y-4 text-center">
                 <h3 className="text-lg font-medium mb-2">QR Code Scanner</h3>
@@ -142,9 +173,10 @@ export default function AttendanceCapture() {
               </div>
             </TabsContent>
 
+            {/* Voice */}
             <TabsContent value="voice" className="mt-6 text-center">
               <h3 className="text-lg font-medium mb-2">Voice Check-in</h3>
-              <p className="text-gray-600 mb-4">Students speak their name or ID for attendance</p>
+              <p className="text-gray-600 mb-4">Say a student's name to mark present</p>
               <div className="bg-gray-50 rounded-lg p-8">
                 <Button
                   onClick={handleVoiceStart}
@@ -155,31 +187,58 @@ export default function AttendanceCapture() {
                   <Mic className={`mr-2 ${isRecording ? 'animate-pulse' : ''}`} />
                   {isRecording ? 'Recording...' : 'Start Voice Check-in'}
                 </Button>
-                {isRecording && <p className="text-sm text-gray-600 mt-2">Listening for student name or ID...</p>}
+                {isRecording && <p className="text-sm text-gray-600 mt-2">Listening for student name...</p>}
               </div>
             </TabsContent>
 
+            {/* Text */}
             <TabsContent value="text" className="mt-6">
               <div className="space-y-4">
                 <h3 className="text-lg font-medium mb-2">Text Check-in</h3>
-                <p className="text-gray-600 mb-4">Enter student name or ID manually</p>
-                <form onSubmit={handleTextSubmit} className="space-y-4">
-                  <div>
-                    <Label htmlFor="student-input">Student Name or ID</Label>
-                    <Input
-                      id="student-input"
-                      placeholder="Enter student name or ID"
-                      value={textInput}
-                      onChange={(e) => setTextInput(e.target.value)}
+                <p className="text-gray-600 mb-4">Select student name to mark present</p>
+                <Combobox
+                  value={selectedStudent}
+                  onChange={(student: Student | null) => {
+                    if (!student) return;
+                    handleStudentSelect(student);
+                  }}
+                >
+                  <div className="relative">
+                    <Combobox.Input
+                      className="w-full border rounded p-2"
+                      placeholder="Type or select student"
+                      onChange={(e) => setQuery(e.target.value)}
+                      displayValue={(student: Student | null) => student?.name || ''}
                     />
+                    <Combobox.Options className="absolute z-10 mt-1 w-full bg-white border rounded shadow max-h-60 overflow-auto">
+                      {filteredStudents.map((student) => (
+                        <Combobox.Option
+                          key={student.id}
+                          value={student}
+                          className={({ active }) =>
+                            `cursor-pointer select-none p-2 ${active ? 'bg-blue-100' : ''}`
+                          }
+                        >
+                          {student.name} ({student.email})
+                        </Combobox.Option>
+                      ))}
+                      {filteredStudents.length === 0 && (
+                        <div className="p-2 text-gray-500">No students found</div>
+                      )}
+                    </Combobox.Options>
                   </div>
-                  <Button type="submit">
-                    <CheckCircle className="mr-2" size={16} /> Mark Present
-                  </Button>
-                </form>
+                </Combobox>
+
+                {lastScanned && (
+                  <div className="flex items-center gap-2 text-green-600 mt-2">
+                    <CheckCircle size={20} />
+                    <span>Last marked present: {lastScanned}</span>
+                  </div>
+                )}
               </div>
             </TabsContent>
 
+            {/* LMS */}
             <TabsContent value="lms" className="mt-6 text-center">
               <h3 className="text-lg font-medium mb-2">LMS Integration</h3>
               <p className="text-gray-600 mb-4">Sync attendance from Learning Management System</p>
